@@ -202,3 +202,22 @@ Backend sẽ tự động:
 3. Ghi đồng thời vào `ORDERS`, `ORDER_DETAIL`, `PAYMENT`.
 4. Đổi trạng thái bàn thành `OCCUPIED`.
 5. COMMIT (hoặc ROLLBACK nếu lỗi).
+
+---
+
+## 7. Cài đặt và Khởi chạy Frontend (ReactJS + Redux Toolkit + Redux Saga)
+
+### Kiến trúc Frontend:
+- **Redux Slices**: Quản lý state cho từng module (`dashboard`, `category`, `product`, `customer`, `employee`, `table`, `order`, `payment`).
+- **Redux Saga**: Xử lý bất đồng bộ (side effects) khi gọi API thông qua Axios Client, tự động dispatch action success/failure và cập nhật state.
+- **UI Components**: Sử dụng `useSelector` để lấy dữ liệu từ Redux Store và `useDispatch` để phát action.
+
+### Cài đặt packages & Chạy:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Truy cập: `http://localhost:5173`
+
