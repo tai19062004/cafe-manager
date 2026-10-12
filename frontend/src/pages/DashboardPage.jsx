@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import dashboardApi from '../api/dashboardApi';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchDashboardStatsRequest } from '../redux/slices/dashboardSlice.js';
 import {
   Coffee,
   Users,
@@ -9,33 +10,25 @@ import {
   TrendingUp,
   RefreshCw,
   Clock,
-  CheckCircle2,
-  AlertCircle
 } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { stats, loading } = useSelector((state) => state.dashboard);
   const { showToast } = useToast();
 
-  const fetchStats = async () => {
-    setLoading(true);
-    try {
-      const res = await dashboardApi.getStats();
-      if (res.success) {
-        setStats(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const fetchStats = () => {
+    dispatch(
+      fetchDashboardStatsRequest({
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [dispatch]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -48,7 +41,7 @@ export default function DashboardPage() {
     return (
       <div className="state-container">
         <div className="spinner" />
-        <p>Đang tải dữ liệu thống kê từ Oracle Database...</p>
+        <p>Đang tải dữ liệu thống kê từ Oracle Database qua Redux Saga...</p>
       </div>
     );
   }
@@ -99,7 +92,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="page-title">Dashboard Tổng Quan</h1>
           <p className="page-subtitle">
-            Hệ thống quản lý thời gian thực kết nối Oracle AI Database Free 26ai
+            Quản lý API bằng Redux Toolkit + Redux Saga kết nối Oracle AI Database Free 26ai
           </p>
         </div>
         <button onClick={fetchStats} className="btn btn-secondary" disabled={loading}>
@@ -344,4 +337,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

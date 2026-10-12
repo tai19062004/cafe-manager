@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import customerApi from '../api/customerApi';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchCustomersRequest,
+  createCustomerRequest,
+  updateCustomerRequest,
+  deleteCustomerRequest,
+} from '../redux/slices/customerSlice.js';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
@@ -14,8 +20,10 @@ const initialForm = {
 };
 
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { customers, loading } = useSelector((state) => state.customer);
+  const { showToast } = useToast();
+
   const [search, setSearch] = useState('');
 
   // Modal
@@ -28,27 +36,20 @@ export default function CustomersPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const { showToast } = useToast();
-
-  const fetchCustomers = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (search.trim()) params.search = search.trim();
-      const res = await customerApi.getAll(params);
-      if (res.success) {
-        setCustomers(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const fetchCustomers = () => {
+    const params = {};
+    if (search.trim()) params.search = search.trim();
+    dispatch(
+      fetchCustomersRequest({
+        params,
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchCustomers();
-  }, []);
+  }, [dispatch]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -73,7 +74,7 @@ export default function CustomersPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (!formData.customer_name.trim()) {
@@ -90,36 +91,57 @@ export default function CustomersPage() {
     }
 
     setFormLoading(true);
-    try {
-      if (editingCustomer) {
-        await customerApi.update(editingCustomer.customer_id, formData);
-        showToast('Cập nhật khách hàng thành công!');
-      } else {
-        await customerApi.create(formData);
-        showToast('Thêm khách hàng mới thành công!');
-      }
-      setIsModalOpen(false);
-      fetchCustomers();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setFormLoading(false);
+    if (editingCustomer) {
+      dispatch(
+        updateCustomerRequest({
+          id: editingCustomer.customer_id,
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Cập nhật khách hàng thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
+    } else {
+      dispatch(
+        createCustomerRequest({
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Thêm khách hàng mới thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    try {
-      await customerApi.delete(deleteId);
-      showToast('Đã xóa khách hàng.');
-      setDeleteId(null);
-      fetchCustomers();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setDeleteLoading(false);
-    }
+    dispatch(
+      deleteCustomerRequest({
+        id: deleteId,
+        onSuccess: () => {
+          setDeleteLoading(false);
+          setDeleteId(null);
+          showToast('Đã xóa khách hàng.');
+        },
+        onError: (msg) => {
+          setDeleteLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
   return (
@@ -127,7 +149,7 @@ export default function CustomersPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý Khách hàng</h1>
-          <p className="page-subtitle">Thông tin khách hàng thân thiết và tích điểm của quán café</p>
+          <p className="page-subtitle">Thông tin khách hàng quản lý qua Redux Toolkit & Saga</p>
         </div>
         <button onClick={openCreateModal} className="btn btn-primary">
           <Plus size={18} />
@@ -151,10 +173,10 @@ export default function CustomersPage() {
         </button>
       </div>
 
-      {loading ? (
+      {loading && customers.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải danh sách khách hàng...</p>
+          <p>Đang tải danh sách khách hàng qua Redux Saga...</p>
         </div>
       ) : customers.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -332,4 +354,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-

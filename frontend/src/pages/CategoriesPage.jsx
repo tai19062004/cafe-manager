@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import categoryApi from '../api/categoryApi';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchCategoriesRequest,
+  createCategoryRequest,
+  updateCategoryRequest,
+  deleteCategoryRequest,
+} from '../redux/slices/categorySlice.js';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
@@ -12,8 +18,9 @@ const initialForm = {
 };
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { categories, loading } = useSelector((state) => state.category);
+  const { showToast } = useToast();
 
   // Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,25 +32,17 @@ export default function CategoriesPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const { showToast } = useToast();
-
-  const fetchCategories = async () => {
-    setLoading(true);
-    try {
-      const res = await categoryApi.getAll();
-      if (res.success) {
-        setCategories(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const fetchCategories = () => {
+    dispatch(
+      fetchCategoriesRequest({
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [dispatch]);
 
   const openCreateModal = () => {
     setEditingCategory(null);
@@ -61,7 +60,7 @@ export default function CategoriesPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!formData.category_name.trim()) {
       showToast('Tên danh mục không được để trống.', 'error');
@@ -69,36 +68,57 @@ export default function CategoriesPage() {
     }
 
     setFormLoading(true);
-    try {
-      if (editingCategory) {
-        await categoryApi.update(editingCategory.category_id, formData);
-        showToast('Cập nhật danh mục thành công!');
-      } else {
-        await categoryApi.create(formData);
-        showToast('Thêm danh mục mới thành công!');
-      }
-      setIsModalOpen(false);
-      fetchCategories();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setFormLoading(false);
+    if (editingCategory) {
+      dispatch(
+        updateCategoryRequest({
+          id: editingCategory.category_id,
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Cập nhật danh mục thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
+    } else {
+      dispatch(
+        createCategoryRequest({
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Thêm danh mục mới thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    try {
-      await categoryApi.delete(deleteId);
-      showToast('Đã xóa danh mục.');
-      setDeleteId(null);
-      fetchCategories();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setDeleteLoading(false);
-    }
+    dispatch(
+      deleteCategoryRequest({
+        id: deleteId,
+        onSuccess: () => {
+          setDeleteLoading(false);
+          setDeleteId(null);
+          showToast('Đã xóa danh mục.');
+        },
+        onError: (msg) => {
+          setDeleteLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
   return (
@@ -106,7 +126,7 @@ export default function CategoriesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý Danh mục Món</h1>
-          <p className="page-subtitle">Phân loại các dòng sản phẩm của quán (Cà phê, Trà, Bánh ngọt...)</p>
+          <p className="page-subtitle">Phân loại các dòng sản phẩm của quán qua Redux Slice & Saga</p>
         </div>
         <button onClick={openCreateModal} className="btn btn-primary">
           <Plus size={18} />
@@ -114,10 +134,10 @@ export default function CategoriesPage() {
         </button>
       </div>
 
-      {loading ? (
+      {loading && categories.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải danh mục từ Oracle...</p>
+          <p>Đang tải danh mục từ Oracle qua Redux Saga...</p>
         </div>
       ) : categories.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -249,4 +269,3 @@ export default function CategoriesPage() {
     </div>
   );
 }
-

@@ -1,5 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import orderApi from '../api/orderApi';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchOrdersRequest,
+  updateOrderStatusRequest,
+  deleteOrderRequest,
+} from '../redux/slices/orderSlice.js';
 import CreateOrderModal from './CreateOrderModal';
 import OrderDetailModal from './OrderDetailModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -10,13 +15,13 @@ import {
   Eye,
   XCircle,
   Trash2,
-  Calendar,
-  CreditCard
 } from 'lucide-react';
 
 export default function OrdersPage() {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { orders, loading } = useSelector((state) => state.order);
+  const { showToast } = useToast();
+
   const [statusFilter, setStatusFilter] = useState('');
 
   // Modals
@@ -31,56 +36,58 @@ export default function OrdersPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const { showToast } = useToast();
-
-  const fetchOrders = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (statusFilter) params.status = statusFilter;
-      const res = await orderApi.getAll(params);
-      if (res.success) {
-        setOrders(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const fetchOrders = () => {
+    const params = {};
+    if (statusFilter) params.status = statusFilter;
+    dispatch(
+      fetchOrdersRequest({
+        params,
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter]);
+  }, [dispatch, statusFilter]);
 
-  const handleCancelOrder = async () => {
+  const handleCancelOrder = () => {
     if (!cancelId) return;
     setCancelLoading(true);
-    try {
-      await orderApi.updateStatus(cancelId, 'CANCELLED');
-      showToast('Đã hủy đơn hàng thành công. Bàn đã được chuyển về trạng thái Trống.');
-      setCancelId(null);
-      fetchOrders();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setCancelLoading(false);
-    }
+    dispatch(
+      updateOrderStatusRequest({
+        id: cancelId,
+        status: 'CANCELLED',
+        onSuccess: () => {
+          setCancelLoading(false);
+          setCancelId(null);
+          showToast('Đã hủy đơn hàng thành công. Bàn đã được chuyển về trạng thái Trống.');
+        },
+        onError: (msg) => {
+          setCancelLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
-  const handleDeleteOrder = async () => {
+  const handleDeleteOrder = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    try {
-      await orderApi.delete(deleteId);
-      showToast('Đã xóa đơn hàng khỏi cơ sở dữ liệu Oracle.');
-      setDeleteId(null);
-      fetchOrders();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setDeleteLoading(false);
-    }
+    dispatch(
+      deleteOrderRequest({
+        id: deleteId,
+        onSuccess: () => {
+          setDeleteLoading(false);
+          setDeleteId(null);
+          showToast('Đã xóa đơn hàng khỏi cơ sở dữ liệu Oracle.');
+        },
+        onError: (msg) => {
+          setDeleteLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
   const formatCurrency = (val) => {
@@ -93,7 +100,7 @@ export default function OrdersPage() {
         <div>
           <h1 className="page-title">Quản lý Đơn hàng (Orders)</h1>
           <p className="page-subtitle">
-            Lịch sử giao dịch, chi tiết món và quản lý thanh toán thời gian thực
+            Lịch sử giao dịch, chi tiết món và quản lý qua Redux Toolkit & Saga
           </p>
         </div>
         <button onClick={() => setIsCreateOpen(true)} className="btn btn-primary">
@@ -125,10 +132,10 @@ export default function OrdersPage() {
       </div>
 
       {/* Orders Table */}
-      {loading ? (
+      {loading && orders.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải danh sách đơn hàng...</p>
+          <p>Đang tải danh sách đơn hàng qua Redux Saga...</p>
         </div>
       ) : orders.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -257,4 +264,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-

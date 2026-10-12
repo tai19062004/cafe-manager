@@ -1,9 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import employeeApi from '../api/employeeApi';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchEmployeesRequest,
+  createEmployeeRequest,
+  updateEmployeeRequest,
+  deleteEmployeeRequest,
+} from '../redux/slices/employeeSlice.js';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
-import { Plus, Search, Edit2, Trash2, UserCheck, Phone, Mail, Briefcase, DollarSign } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, UserCheck, Phone, Mail, Briefcase } from 'lucide-react';
 
 const initialForm = {
   employee_name: '',
@@ -15,8 +21,10 @@ const initialForm = {
 };
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { employees, loading } = useSelector((state) => state.employee);
+  const { showToast } = useToast();
+
   const [search, setSearch] = useState('');
 
   // Modal
@@ -29,27 +37,20 @@ export default function EmployeesPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const { showToast } = useToast();
-
-  const fetchEmployees = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (search.trim()) params.search = search.trim();
-      const res = await employeeApi.getAll(params);
-      if (res.success) {
-        setEmployees(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const fetchEmployees = () => {
+    const params = {};
+    if (search.trim()) params.search = search.trim();
+    dispatch(
+      fetchEmployeesRequest({
+        params,
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchEmployees();
-  }, []);
+  }, [dispatch]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -75,7 +76,7 @@ export default function EmployeesPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (!formData.employee_name.trim()) {
@@ -97,36 +98,57 @@ export default function EmployeesPage() {
     }
 
     setFormLoading(true);
-    try {
-      if (editingEmployee) {
-        await employeeApi.update(editingEmployee.employee_id, formData);
-        showToast('Cập nhật nhân viên thành công!');
-      } else {
-        await employeeApi.create(formData);
-        showToast('Thêm nhân viên mới thành công!');
-      }
-      setIsModalOpen(false);
-      fetchEmployees();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setFormLoading(false);
+    if (editingEmployee) {
+      dispatch(
+        updateEmployeeRequest({
+          id: editingEmployee.employee_id,
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Cập nhật nhân viên thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
+    } else {
+      dispatch(
+        createEmployeeRequest({
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Thêm nhân viên mới thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    try {
-      await employeeApi.delete(deleteId);
-      showToast('Đã xóa nhân viên.');
-      setDeleteId(null);
-      fetchEmployees();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setDeleteLoading(false);
-    }
+    dispatch(
+      deleteEmployeeRequest({
+        id: deleteId,
+        onSuccess: () => {
+          setDeleteLoading(false);
+          setDeleteId(null);
+          showToast('Đã xóa nhân viên.');
+        },
+        onError: (msg) => {
+          setDeleteLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
   const formatCurrency = (val) => {
@@ -138,7 +160,7 @@ export default function EmployeesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý Nhân sự Quán</h1>
-          <p className="page-subtitle">Danh sách nhân viên thu ngân, pha chế, phục vụ và quản lý quán café</p>
+          <p className="page-subtitle">Danh sách nhân viên quản lý qua Redux Toolkit & Saga</p>
         </div>
         <button onClick={openCreateModal} className="btn btn-primary">
           <Plus size={18} />
@@ -162,10 +184,10 @@ export default function EmployeesPage() {
         </button>
       </div>
 
-      {loading ? (
+      {loading && employees.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải danh sách nhân viên...</p>
+          <p>Đang tải danh sách nhân viên qua Redux Saga...</p>
         </div>
       ) : employees.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -350,4 +372,3 @@ export default function EmployeesPage() {
     </div>
   );
 }
-

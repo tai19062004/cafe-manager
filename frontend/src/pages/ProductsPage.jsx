@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import productApi from '../api/productApi';
-import categoryApi from '../api/categoryApi';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchProductsRequest,
+  createProductRequest,
+  updateProductRequest,
+  deleteProductRequest,
+} from '../redux/slices/productSlice.js';
+import { fetchCategoriesRequest } from '../redux/slices/categorySlice.js';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
@@ -11,7 +17,6 @@ import {
   Trash2,
   Coffee,
   Filter,
-  CheckCircle2
 } from 'lucide-react';
 
 const initialForm = {
@@ -24,9 +29,11 @@ const initialForm = {
 };
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { products, loading } = useSelector((state) => state.product);
+  const { categories } = useSelector((state) => state.category);
+  const { showToast } = useToast();
+
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
 
@@ -40,42 +47,26 @@ export default function ProductsPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const { showToast } = useToast();
+  const fetchProducts = () => {
+    const params = {};
+    if (search.trim()) params.search = search.trim();
+    if (selectedCategory) params.category_id = selectedCategory;
 
-  const fetchCategories = async () => {
-    try {
-      const res = await categoryApi.getAll();
-      if (res.success) setCategories(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (search.trim()) params.search = search.trim();
-      if (selectedCategory) params.category_id = selectedCategory;
-
-      const res = await productApi.getAll(params);
-      if (res.success) {
-        setProducts(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+    dispatch(
+      fetchProductsRequest({
+        params,
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
-    fetchCategories();
-  }, []);
+    dispatch(fetchCategoriesRequest());
+  }, [dispatch]);
 
   useEffect(() => {
     fetchProducts();
-  }, [selectedCategory]);
+  }, [dispatch, selectedCategory]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -104,10 +95,9 @@ export default function ProductsPage() {
     setIsModalOpen(true);
   };
 
-  const handleFormSubmit = async (e) => {
+  const handleFormSubmit = (e) => {
     e.preventDefault();
 
-    // Frontend Validation
     if (!formData.product_name.trim()) {
       showToast('Vui lòng nhập tên món/sản phẩm.', 'error');
       return;
@@ -122,36 +112,57 @@ export default function ProductsPage() {
     }
 
     setFormLoading(true);
-    try {
-      if (editingProduct) {
-        await productApi.update(editingProduct.product_id, formData);
-        showToast('Cập nhật thông tin món thành công!');
-      } else {
-        await productApi.create(formData);
-        showToast('Thêm món mới thành công!');
-      }
-      setIsModalOpen(false);
-      fetchProducts();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setFormLoading(false);
+    if (editingProduct) {
+      dispatch(
+        updateProductRequest({
+          id: editingProduct.product_id,
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Cập nhật thông tin món thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
+    } else {
+      dispatch(
+        createProductRequest({
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Thêm món mới thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
     }
   };
 
-  const handleDeleteConfirm = async () => {
+  const handleDeleteConfirm = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    try {
-      await productApi.delete(deleteId);
-      showToast('Đã xóa sản phẩm thành công.');
-      setDeleteId(null);
-      fetchProducts();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setDeleteLoading(false);
-    }
+    dispatch(
+      deleteProductRequest({
+        id: deleteId,
+        onSuccess: () => {
+          setDeleteLoading(false);
+          setDeleteId(null);
+          showToast('Đã xóa sản phẩm thành công.');
+        },
+        onError: (msg) => {
+          setDeleteLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
   const formatCurrency = (val) => {
@@ -164,7 +175,7 @@ export default function ProductsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý Sản phẩm (Đồ uống & Món)</h1>
-          <p className="page-subtitle">Quản lý danh sách các món đồ uống, giá bán và danh mục liên kết</p>
+          <p className="page-subtitle">Quản lý danh sách các món qua Redux Toolkit & Redux Saga</p>
         </div>
         <button onClick={openCreateModal} className="btn btn-primary">
           <Plus size={18} />
@@ -207,10 +218,10 @@ export default function ProductsPage() {
       </div>
 
       {/* Products Table */}
-      {loading ? (
+      {loading && products.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải dữ liệu sản phẩm...</p>
+          <p>Đang tải dữ liệu sản phẩm qua Redux Saga...</p>
         </div>
       ) : products.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -404,4 +415,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-

@@ -1,34 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchOrderByIdRequest, clearCurrentOrder } from '../redux/slices/orderSlice.js';
 import Modal from '../components/Modal';
-import orderApi from '../api/orderApi';
 import { useToast } from '../context/ToastContext';
-import { Receipt, Calendar, User, UserCheck, UtensilsCrossed, CreditCard } from 'lucide-react';
 
 export default function OrderDetailModal({ isOpen, onClose, orderId }) {
-  const [order, setOrder] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const dispatch = useDispatch();
+  const { currentOrder: order, loading } = useSelector((state) => state.order);
   const { showToast } = useToast();
 
   useEffect(() => {
     if (isOpen && orderId) {
-      const fetchDetail = async () => {
-        setLoading(true);
-        try {
-          const res = await orderApi.getById(orderId);
-          if (res.success) {
-            setOrder(res.data);
-          }
-        } catch (err) {
-          showToast(err.message, 'error');
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchDetail();
+      dispatch(
+        fetchOrderByIdRequest({
+          id: orderId,
+          onError: (msg) => showToast(msg, 'error'),
+        })
+      );
     } else {
-      setOrder(null);
+      dispatch(clearCurrentOrder());
     }
-  }, [isOpen, orderId]);
+  }, [dispatch, isOpen, orderId]);
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
@@ -39,7 +31,7 @@ export default function OrderDetailModal({ isOpen, onClose, orderId }) {
       {loading ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải chi tiết đơn hàng...</p>
+          <p>Đang tải chi tiết đơn hàng qua Redux Saga...</p>
         </div>
       ) : !order ? (
         <p style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)' }}>
@@ -156,4 +148,3 @@ export default function OrderDetailModal({ isOpen, onClose, orderId }) {
     </Modal>
   );
 }
-

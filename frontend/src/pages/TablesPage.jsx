@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import tableApi from '../api/tableApi';
+import { useDispatch, useSelector } from 'react-redux';
+import {
+  fetchTablesRequest,
+  createTableRequest,
+  updateTableRequest,
+  deleteTableRequest,
+} from '../redux/slices/tableSlice.js';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useToast } from '../context/ToastContext';
@@ -23,8 +29,10 @@ const initialForm = {
 };
 
 export default function TablesPage() {
-  const [tables, setTables] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { tables, loading } = useSelector((state) => state.table);
+  const { showToast } = useToast();
+
   const [statusFilter, setStatusFilter] = useState('');
 
   // Modal
@@ -37,27 +45,20 @@ export default function TablesPage() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const { showToast } = useToast();
-
-  const fetchTables = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (statusFilter) params.status = statusFilter;
-      const res = await tableApi.getAll(params);
-      if (res.success) {
-        setTables(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+  const fetchTables = () => {
+    const params = {};
+    if (statusFilter) params.status = statusFilter;
+    dispatch(
+      fetchTablesRequest({
+        params,
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchTables();
-  }, [statusFilter]);
+  }, [dispatch, statusFilter]);
 
   const openCreateModal = () => {
     setEditingTable(null);
@@ -76,7 +77,7 @@ export default function TablesPage() {
     setIsModalOpen(true);
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
 
     if (!formData.table_name.trim()) {
@@ -89,36 +90,57 @@ export default function TablesPage() {
     }
 
     setFormLoading(true);
-    try {
-      if (editingTable) {
-        await tableApi.update(editingTable.table_id, formData);
-        showToast('Cập nhật bàn thành công!');
-      } else {
-        await tableApi.create(formData);
-        showToast('Thêm bàn mới thành công!');
-      }
-      setIsModalOpen(false);
-      fetchTables();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setFormLoading(false);
+    if (editingTable) {
+      dispatch(
+        updateTableRequest({
+          id: editingTable.table_id,
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Cập nhật bàn thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
+    } else {
+      dispatch(
+        createTableRequest({
+          data: formData,
+          onSuccess: () => {
+            setFormLoading(false);
+            setIsModalOpen(false);
+            showToast('Thêm bàn mới thành công!');
+          },
+          onError: (msg) => {
+            setFormLoading(false);
+            showToast(msg, 'error');
+          },
+        })
+      );
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!deleteId) return;
     setDeleteLoading(true);
-    try {
-      await tableApi.delete(deleteId);
-      showToast('Đã xóa bàn.');
-      setDeleteId(null);
-      fetchTables();
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setDeleteLoading(false);
-    }
+    dispatch(
+      deleteTableRequest({
+        id: deleteId,
+        onSuccess: () => {
+          setDeleteLoading(false);
+          setDeleteId(null);
+          showToast('Đã xóa bàn.');
+        },
+        onError: (msg) => {
+          setDeleteLoading(false);
+          showToast(msg, 'error');
+        },
+      })
+    );
   };
 
   const getStatusBadge = (status) => {
@@ -151,7 +173,7 @@ export default function TablesPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Sơ đồ & Danh sách Bàn Café</h1>
-          <p className="page-subtitle">Quản lý trạng thái bàn (Trống / Đang phục vụ / Bảo trì) trong quán</p>
+          <p className="page-subtitle">Quản lý trạng thái bàn qua Redux Toolkit & Saga</p>
         </div>
         <button onClick={openCreateModal} className="btn btn-primary">
           <Plus size={18} />
@@ -188,10 +210,10 @@ export default function TablesPage() {
       </div>
 
       {/* Table Cards Visual Floor Plan */}
-      {loading ? (
+      {loading && tables.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải sơ đồ bàn...</p>
+          <p>Đang tải sơ đồ bàn qua Redux Saga...</p>
         </div>
       ) : tables.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -363,4 +385,3 @@ export default function TablesPage() {
     </div>
   );
 }
-

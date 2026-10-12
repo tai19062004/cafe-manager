@@ -1,37 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import paymentApi from '../api/paymentApi';
+import { useDispatch, useSelector } from 'react-redux';
+import { fetchPaymentsRequest } from '../redux/slices/paymentSlice.js';
 import { useToast } from '../context/ToastContext';
-import { CreditCard, DollarSign, Calendar, Filter, RefreshCw } from 'lucide-react';
+import { CreditCard, Filter, RefreshCw } from 'lucide-react';
 
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const dispatch = useDispatch();
+  const { payments, loading } = useSelector((state) => state.payment);
+  const { showToast } = useToast();
+
   const [methodFilter, setMethodFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
 
-  const { showToast } = useToast();
+  const fetchPayments = () => {
+    const params = {};
+    if (methodFilter) params.payment_method = methodFilter;
+    if (statusFilter) params.status = statusFilter;
 
-  const fetchPayments = async () => {
-    setLoading(true);
-    try {
-      const params = {};
-      if (methodFilter) params.payment_method = methodFilter;
-      if (statusFilter) params.status = statusFilter;
-
-      const res = await paymentApi.getAll(params);
-      if (res.success) {
-        setPayments(res.data);
-      }
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+    dispatch(
+      fetchPaymentsRequest({
+        params,
+        onError: (msg) => showToast(msg, 'error'),
+      })
+    );
   };
 
   useEffect(() => {
     fetchPayments();
-  }, [methodFilter, statusFilter]);
+  }, [dispatch, methodFilter, statusFilter]);
 
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(val || 0);
@@ -42,7 +38,7 @@ export default function PaymentsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Quản lý Thanh toán & Doanh thu</h1>
-          <p className="page-subtitle">Sổ cái giao dịch thanh toán từ bảng PAYMENT liên kết 1-1 với ORDERS</p>
+          <p className="page-subtitle">Sổ cái giao dịch thanh toán quản lý qua Redux Toolkit & Saga</p>
         </div>
         <button onClick={fetchPayments} className="btn btn-secondary">
           <RefreshCw size={16} />
@@ -80,10 +76,10 @@ export default function PaymentsPage() {
       </div>
 
       {/* Table */}
-      {loading ? (
+      {loading && payments.length === 0 ? (
         <div className="state-container">
           <div className="spinner" />
-          <p>Đang tải dữ liệu thanh toán...</p>
+          <p>Đang tải dữ liệu thanh toán qua Redux Saga...</p>
         </div>
       ) : payments.length === 0 ? (
         <div className="state-container" style={{ background: '#fff', borderRadius: 12, border: '1px solid var(--border)' }}>
@@ -141,4 +137,3 @@ export default function PaymentsPage() {
     </div>
   );
 }
-
